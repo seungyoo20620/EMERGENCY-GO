@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>응급GO AI | 실시간 야간·휴일 응급의료센터 & AI 경로 안내</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet CSS for Map Simulation -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Pretendard', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        darkbg: '#090D16',
+                        darkcard: '#121826',
+                        darkborder: '#1E293B',
+                        accentAi: '#6366F1',
+                        signalGreen: '#10B981',
+                        signalYellow: '#F59E0B',
+                        signalRed: '#EF4444',
+                        cyanGlow: '#06B6D4'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #090D16;
+            color: #F1F5F9;
+        }
+        
+        /* Glassmorphism Styles */
+        .glass-panel {
+            background: rgba(18, 24, 38, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            background: rgba(22, 30, 46, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.25s ease-in-out;
+        }
+        .glass-card:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            box-shadow: 0 8px 24px -6px rgba(99, 102, 241, 0.15);
+        }
+
+        /* Signal Glows */
+        .glow-green { box-shadow: 0 0 12px rgba(16, 185, 129, 0.5); }
+        .glow-yellow { box-shadow: 0 0 12px rgba(245, 158, 11, 0.5); }
+        .glow-red { box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
+        .glow-ai { box-shadow: 0 0 16px rgba(99, 102, 241, 0.4); }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #090D16; }
+        ::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+        /* Leaflet Dark Map Customization */
+        .leaflet-container {
+            background: #0d131f !important;
+            font-family: 'Pretendard', sans-serif;
+        }
+        .leaflet-tile {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3);
+        }
+        .leaflet-control-zoom {
+            border: none !important;
+        }
+        .leaflet-control-zoom a {
+            background-color: #1e293b !important;
+            color: #f1f5f9 !important;
+            border-color: #334155 !important;
+        }
+
+        /* Pulse Animation */
+        @keyframes pulse-fast {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.08); opacity: 0.8; }
+        }
+        .animate-pulse-fast { animation: pulse-fast 1.2s infinite ease-in-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- 1. HEADER & TOP NAVIGATION -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-4 lg:px-8 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            
+            <!-- Brand Logo & Live GPS -->
+            <div class="flex items-center justify-between w-full sm:w-auto">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-500/30">
+                        <i class="fa-solid fa-hospital-user"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h1 class="text-lg font-black tracking-tight text-white flex items-center gap-1">
+                                응급<span class="text-indigo-400">GO</span> <span class="text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/50 font-mono font-bold">AI v2.6</span>
+                            </h1>
+                        </div>
+                        <p class="text-[11px] text-slate-400 font-medium">국립중앙의료원 · 심평원 API 통합 가이드</p>
+                    </div>
+                </div>
+
+                <!-- GPS Mobile Badge -->
+                <div class="sm:hidden">
+                    <span class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 inline-flex items-center gap-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> GPS 실시간
+                    </span>
+                </div>
+            </div>
+
+            <!-- Top Header Indicators & Location -->
+            <div class="flex items-center space-x-3 w-full sm:w-auto justify-end text-xs">
+                <!-- Location Indicator -->
+                <button onclick="getCurrentGPSLocation()" class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-900/90 border border-gray-800 hover:border-cyan-500/50 transition cursor-pointer">
+                    <i class="fa-solid fa-location-crosshairs text-cyan-400 animate-spin" style="animation-duration: 6s;"></i>
+                    <span class="text-gray-400">현재 위치:</span>
+                    <span class="font-semibold text-gray-200" id="current-location-text">서울특별시 강남구 역삼동</span>
+                    <span class="text-[10px] text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800/40">GPS 재수신</span>
+                </button>
+                <!-- AI Status -->
+                <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-cyan-950/40 border border-cyan-800/40 text-cyan-300">
+                    <i class="fa-solid fa-microchip text-cyan-400 animate-pulse"></i>
+                    <span class="font-medium text-xs">AI 실시간 경로 분석 가동 중</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN APP CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-5 flex-1 w-full space-y-5 pb-12">
+
+        <!-- 2. EMERGENCY CRITICAL DISCLAIMER & 119 DIRECT BANNER -->
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950/90 via-slate-900 to-slate-900 border border-red-500/50 p-4 sm:p-5 shadow-2xl">
+            <div class="absolute -right-4 -bottom-6 text-red-500/10 text-9xl font-black pointer-events-none">119</div>
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+                <div class="flex items-start space-x-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/50 flex items-center justify-center shrink-0 glow-red">
+                        <i class="fa-solid fa-triangle-exclamation text-red-400 text-xl animate-pulse-fast"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-red-200 font-bold text-sm sm:text-base">응급 상황 필수 확인 및 주의사항</h2>
+                            <span class="text-[10px] font-extrabold bg-red-600 text-white px-2 py-0.5 rounded-full">긴급</span>
+                        </div>
+                        <p class="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+                            공공데이터 기반 참고 정보이며 현장 실시간 환자 집중 상황에 따라 차이가 있을 수 있습니다. <strong class="text-white underline decoration-red-400">의식불명, 대량출혈, 호흡곤란, 심정지 등 중증 위급 상황은 즉시 119에 신고하세요.</strong>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 119 Direct Call Button -->
+                <a href="tel:119" class="w-full md:w-auto shrink-0 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-extrabold text-sm px-6 py-3 rounded-xl shadow-lg shadow-red-900/60 flex items-center justify-center space-x-2.5 transition border border-red-400/30">
+                    <i class="fa-solid fa-phone-volume text-lg animate-bounce"></i>
+                    <span>119 즉시 전화 연결</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- 3. SEARCH & SYMPTOM INPUT BAR WITH VOICE SEARCH SIMULATION -->
+        <div class="glass-panel p-4 rounded-2xl border-indigo-500/20 shadow-xl space-y-3">
+            <div class="flex flex-col md:flex-row items-center gap-3">
+                <!-- Input Box -->
+                <div class="relative flex-1 w-full">
+                    <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-400 text-sm"></i>
+                    <input type="text" id="symptom-search" onkeyup="handleSearch()" placeholder="증상 또는 병원명 검색 (예: 소아 야간 고열, 맹장, 복통, 강남세브란스...)" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-11 pr-24 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                    <button onclick="triggerVoiceSearch()" class="absolute right-2 top-2 px-3 py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+                        <i class="fa-solid fa-microphone text-indigo-400"></i>
+                        <span class="hidden sm:inline">음성 검색</span>
+                    </button>
+                </div>
+
+                <!-- Quick Reset -->
+                <button onclick="resetSearch()" class="w-full md:w-auto px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>초기화</span>
+                </button>
+            </div>
+
+            <!-- Voice Search Feedback Overlay (Hidden by default) -->
+            <div id="voice-overlay" class="hidden p-3 bg-indigo-950/60 border border-indigo-500/40 rounded-xl flex items-center justify-between text-xs text-indigo-200">
+                <span class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></span>
+                    <span id="voice-text">음성을 듣고 있습니다... "소아 야간 발열"</span>
+                </span>
+                <span class="text-[11px] text-slate-400">AI 자연어 분석 중</span>
+            </div>
+        </div>
+
+        <!-- 4. INTERACTIVE MAP & FILTER CONTROLS GRID -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+            <!-- LEFT/TOP: FILTER TABS & HOSPITAL LIST (7 Cols on Large) -->
+            <div class="lg:col-span-7 space-y-4">
+                
+                <!-- Filter Tabs & Signal Light Legend -->
+                <div class="space-y-3">
+                    <div class="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none" id="filter-tabs">
+                        <button onclick="setFilter('ai_rec')" id="tab-ai_rec" class="filter-tab active px-4 py-2.5 rounded-xl text-xs font-bold transition shrink-0 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 flex items-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles text-cyan-300"></i>
+                            <span>거리순 (AI 추천)</span>
+                        </button>
+                        <button onclick="setFilter('beds_available')" id="tab-beds_available" class="filter-tab px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition shrink-0 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bed-pulse text-emerald-400"></i>
+                            <span>병상 여유순</span>
+                        </button>
+                        <button onclick="setFilter('pediatric')" id="tab-pediatric" class="filter-tab px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition shrink-0 flex items-center gap-1.5">
+                            <i class="fa-solid fa-baby text-amber-400"></i>
+                            <span>소아 응급 전문</span>
+                        </button>
+                        <button onclick="setFilter('clinic_night')" id="tab-clinic_night" class="filter-tab px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition shrink-0 flex items-center gap-1.5">
+                            <i class="fa-solid fa-user-doctor text-cyan-400"></i>
+                            <span>야간/주말 의원</span>
+                        </button>
+                    </div>
+
+                    <!-- Traffic Light Legend Line -->
+                    <div class="flex items-center justify-between text-[11px] bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-800">
+                        <span class="text-slate-400 font-semibold flex items-center gap-1">
+                            <i class="fa-solid fa-traffic-light text-slate-500"></i> 병상 신호등:
+                        </span>
+                        <div class="flex items-center space-x-3">
+                            <span class="flex items-center gap-1 text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-500 glow-green"></span> 여유 (10+)</span>
+                            <span class="flex items-center gap-1 text-amber-400"><span class="w-2 h-2 rounded-full bg-amber-500 glow-yellow"></span> 보통 (3~9)</span>
+                            <span class="flex items-center gap-1 text-red-400"><span class="w-2 h-2 rounded-full bg-red-500 glow-red"></span> 혼잡 (1~2/만석)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hospital Cards Render List -->
+                <div id="hospital-cards-list" class="space-y-3.5">
+                    <!-- Dynamic Javascript Content Injected Here -->
+                </div>
+
+            </div>
+
+            <!-- RIGHT/BOTTOM: REAL-TIME INTERACTIVE MAP SIMULATION (5 Cols on Large) -->
+            <div class="lg:col-span-5">
+                <div class="sticky top-20 glass-panel p-4 rounded-2xl border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-map-location-dot text-indigo-400"></i>
+                            <h3 class="text-sm font-bold text-white">실시간 지도 & AI 최단 경로</h3>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">Leaflet Vector Engine</span>
+                    </div>
+
+                    <!-- Map Container -->
+                    <div id="map" class="w-full h-[380px] lg:h-[520px] rounded-xl overflow-hidden border border-slate-800 shadow-inner"></div>
+
+                    <!-- Map Tip Footer -->
+                    <div class="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span><i class="fa-solid fa-circle-info text-indigo-400 mr-1"></i> 마커 클릭 시 해당 병원의 AI 상세 경로가 계산됩니다.</span>
+                        <span class="text-emerald-400 font-semibold" id="map-status">준비 완료</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 text-center text-xs text-slate-500 space-y-2 border-t border-slate-800/80 pt-6">
+        <p>본 앱은 국립중앙의료원(중앙응급의료센터 응급의료포털) 및 건강보험심사평가원(보건의료빅데이터) Open API 데이터를 기반으로 제공됩니다.</p>
+        <p>© 2026 EmergencyGO AI Inc. All Rights Reserved. 본 시스템은 긴급 상황 시 보조 참고용 도구입니다.</p>
+    </footer>
+
+
+    <!-- MODAL 1: AI ROUTE GUIDANCE & GOOGLE MAPS MODAL -->
+    <div id="route-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-2xl rounded-2xl border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center space-x-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-lg border border-indigo-500/40 glow-ai">
+                        <i class="fa-solid fa-route"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <span id="route-hospital-name">강남세브란스병원</span>
+                            <span class="text-[10px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-800">AI 실시간 최적화</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-400">교통 정체 및 응급실 대기시간을 고려한 실시간 추천</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('route-modal')" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Body (Google Maps & Navigation Link Area) -->
+            <div class="p-4 overflow-y-auto space-y-4 flex-1">
+                
+                <!-- Google Maps Embed & Interactive Area -->
+                <div class="relative w-full h-64 sm:h-72 rounded-xl overflow-hidden border border-gray-800 bg-gray-950">
+                    <iframe 
+                        id="google-maps-iframe"
+                        width="100%" 
+                        height="100%" 
+                        style="border:0;" 
+                        loading="lazy" 
+                        allowfullscreen 
+                        referrerpolicy="no-referrer-when-downgrade"
+                        src="https://maps.google.com/maps?q=37.4928,127.0463&z=15&output=embed">
+                    </iframe>
+                    
+                    <div class="absolute top-3 left-3 z-10 flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-lg bg-gray-900/90 border border-gray-700 text-[11px] text-gray-200 flex items-center gap-1.5 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+                            Google Maps 실시간 연동
+                        </span>
+                    </div>
+
+                    <div class="absolute bottom-3 right-3 z-10">
+                        <a id="direct-google-maps-link" href="#" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-black text-xs font-bold flex items-center gap-1.5 shadow-xl hover:bg-cyan-400 transition">
+                            <i class="fa-brands fa-google"></i> Google Maps 앱에서 열기
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Multi-Navigation Deep Links Row -->
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="launchNavigation('google')" class="p-2.5 rounded-xl bg-gray-900 border border-gray-800 hover:border-cyan-500 text-xs font-bold text-gray-200 flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-map-location-dot text-cyan-400"></i> Google 지도
+                    </button>
+                    <button onclick="launchNavigation('kakao')" class="p-2.5 rounded-xl bg-gray-900 border border-gray-800 hover:border-yellow-500 text-xs font-bold text-gray-200 flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-location-arrow text-yellow-400"></i> 카카오내비
+                    </button>
+                    <button onclick="launchNavigation('naver')" class="p-2.5 rounded-xl bg-gray-900 border border-gray-800 hover:border-emerald-500 text-xs font-bold text-gray-200 flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-compass text-emerald-400"></i> 네이버지도
+                    </button>
+                </div>
+
+                <!-- AI Analysis Card Breakdown -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 text-center">
+                        <span class="text-[11px] text-gray-400 block mb-1">신호 최적화</span>
+                        <span class="text-sm font-bold text-cyan-400">우회 경로 적용</span>
+                    </div>
+                    <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 text-center">
+                        <span class="text-[11px] text-gray-400 block mb-1">응급실 가용성</span>
+                        <span class="text-sm font-bold text-emerald-400">즉시 수용 가능</span>
+                    </div>
+                    <div class="bg-gray-900/80 p-3 rounded-xl border border-gray-800 text-center">
+                        <span class="text-[11px] text-gray-400 block mb-1">이동 거리</span>
+                        <span class="text-sm font-bold text-white" id="route-dist">1.2 km</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-3">
+                <span class="text-[11px] text-slate-400">내비게이션 내장 가이드</span>
+                <div class="flex gap-2">
+                    <button onclick="closeModal('route-modal')" class="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700">닫기</button>
+                    <button onclick="startNavi()" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-2 shadow-lg shadow-indigo-600/30">
+                        <i class="fa-solid fa-location-arrow"></i>
+                        <span>내비게이션 시작</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL 2: CALL CONFIRMATION MODAL -->
+    <div id="call-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-sm rounded-2xl p-6 border-slate-700 shadow-2xl relative text-center">
+            <button onclick="closeModal('call-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            
+            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-400 flex items-center justify-center text-2xl mx-auto mb-4 glow-green">
+                <i class="fa-solid fa-phone-volume animate-bounce"></i>
+            </div>
+
+            <h3 class="text-lg font-bold text-white mb-1" id="call-hospital-name">병원명</h3>
+            <p class="text-xs text-indigo-400 font-medium mb-4" id="call-dept-name">응급실 원스톱 다이렉트 연결</p>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 mb-5">
+                <span class="text-xs text-slate-400 block mb-0.5">전화번호</span>
+                <span class="text-2xl font-mono font-bold text-white tracking-wider" id="call-phone-number">02-2019-2114</span>
+            </div>
+
+            <div class="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/40 p-3 rounded-xl text-left mb-5 space-y-1">
+                <p class="font-bold flex items-center gap-1"><i class="fa-solid fa-circle-info"></i> 통화 전 체크리스트</p>
+                <p class="text-slate-300">· 환자 연령 및 주요 증상(발열, 의식 등)을 먼저 말씀하세요.</p>
+                <p class="text-slate-300">· 소아 환자의 경우 수용 가능 여부를 재확인하세요.</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeModal('call-modal')" class="w-full py-2.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300">취소</button>
+                <a id="call-direct-link" href="#" class="w-full py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20">
+                    <i class="fa-solid fa-phone"></i>
+                    <span>전화 걸기</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL 3: FAST CHECK-IN / RESERVATION REQUEST MODAL -->
+    <div id="booking-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-panel w-full max-w-md rounded-2xl p-6 border-slate-700 shadow-2xl relative">
+            <button onclick="closeModal('booking-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-hospital-user"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-bold text-white" id="booking-hospital-name">병원명</h3>
+                    <p class="text-xs text-slate-400">야간 · 휴일 사전 빠른 접수 문의</p>
+                </div>
+            </div>
+
+            <form onsubmit="handleBookingSubmit(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">환자 성명</label>
+                    <input type="text" required placeholder="예: 홍길동" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">연락처</label>
+                    <input type="tel" required placeholder="010-0000-0000" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">증상 및 환자 상태</label>
+                    <textarea rows="2" placeholder="예: 소아 야간 고열 38.8도, 약 복용 후 지속" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <div class="p-3 bg-indigo-950/40 border border-indigo-800/40 rounded-xl text-[11px] text-indigo-300">
+                    * 접수 정보가 병원 시스템에 전달되어 이동 중 사전 접수 준비가 진행됩니다.
+                </div>
+                <div class="pt-2 flex gap-2">
+                    <button type="button" onclick="closeModal('booking-modal')" class="w-1/2 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300">취소</button>
+                    <button type="submit" class="w-1/2 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30">사전 접수 제출</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Mock Hospital Dataset
+        const hospitalsData = [
+            {
+                id: 'h1',
+                name: '강남세브란스병원 권역응급의료센터',
+                type: '상급종합병원',
+                lat: 37.4928,
+                lng: 127.0463,
+                signal: 'green',
+                signalText: '여유 (수용 원활)',
+                generalBeds: '14 / 20석 (여유)',
+                pediatricBeds: '3 / 5석 (보통)',
+                negativeIsoBeds: '2석 가용',
+                bedsCountNum: 14,
+                distanceNum: 1.2,
+                distanceStr: '1.2 km',
+                aiEta: '차량 4분 (AI 최적화)',
+                phone: '02-2019-2114',
+                address: '서울특별시 강남구 언주로 211',
+                operatingHours: '24시간 연중무휴 (응급실)',
+                tags: ['ai_rec', 'beds_available', 'pediatric'],
+                notes: '소아응급 전문의 야간 상주 중'
+            },
+            {
+                id: 'h2',
+                name: '도곡달빛어린이병원 (아이제일의원)',
+                type: '달빛어린이병원 / 야간의원',
+                lat: 37.4862,
+                lng: 127.0475,
+                signal: 'green',
+                signalText: '여유 (소아 특화)',
+                generalBeds: '외래 진료 중심',
+                pediatricBeds: '대기 3명 (신속 진료)',
+                negativeIsoBeds: '없음',
+                bedsCountNum: 12,
+                distanceNum: 1.8,
+                distanceStr: '1.8 km',
+                aiEta: '차량 6분',
+                phone: '02-577-8275',
+                address: '서울특별시 강남구 남부순환로 2720',
+                operatingHours: '평일/주말 야간 23:00까지',
+                tags: ['ai_rec', 'pediatric', 'clinic_night'],
+                notes: '소아청소년과 전문의 2명 야간 진료'
+            },
+            {
+                id: 'h3',
+                name: '삼성서울병원 응급의료센터',
+                type: '상급종합병원',
+                lat: 37.4882,
+                lng: 127.0856,
+                signal: 'yellow',
+                signalText: '보통 (대기 일부 발생)',
+                generalBeds: '4 / 32석 (보통)',
+                pediatricBeds: '1 / 8석 (혼잡)',
+                negativeIsoBeds: '1석 가용',
+                bedsCountNum: 4,
+                distanceNum: 3.4,
+                distanceStr: '3.4 km',
+                aiEta: '차량 11분 (우회 도로 안내)',
+                phone: '02-3410-2060',
+                address: '서울특별시 강남구 일원로 81',
+                operatingHours: '24시간 운영',
+                tags: ['ai_rec', 'pediatric'],
+                notes: '중증 응급환자 우선 수용'
+            },
+            {
+                id: 'h4',
+                name: '강남구 보건소 야간진료센터',
+                type: '공공보건기관',
+                lat: 37.5172,
+                lng: 127.0473,
+                signal: 'green',
+                signalText: '여유 (경증 신속처방)',
+                generalBeds: '진료 대기 2명',
+                pediatricBeds: '일반 소아 진료 가능',
+                negativeIsoBeds: '없음',
+                bedsCountNum: 15,
+                distanceNum: 2.5,
+                distanceStr: '2.5 km',
+                aiEta: '차량 8분',
+                phone: '02-3423-5555',
+                address: '서울특별시 강남구 학동로 126',
+                operatingHours: '평일/휴일 22:00까지',
+                tags: ['clinic_night', 'ai_rec'],
+                notes: '야간 경증/처방전발급 원활'
+            },
+            {
+                id: 'h5',
+                name: '차병원 여성응급의료센터',
+                type: '종합병원',
+                lat: 37.5064,
+                lng: 127.0345,
+                signal: 'red',
+                signalText: '혼잡 (방문 전 전화 확인)',
+                generalBeds: '1 / 12석 (만석 임박)',
+                pediatricBeds: '0 / 3석 (만석)',
+                negativeIsoBeds: '0석',
+                bedsCountNum: 1,
+                distanceNum: 2.1,
+                distanceStr: '2.1 km',
+                aiEta: '차량 7분',
+                phone: '02-3468-3000',
+                address: '서울특별시 강남구 논현로 566',
+                operatingHours: '24시간 운영',
+                tags: ['clinic_night'],
+                notes: '병상 포화 상태로 전화 필수'
+            }
+        ];
+
+        let activeFilter = 'ai_rec';
+        let leafletMap = null;
+        let markersGroup = [];
+        let routePolyline = null;
+        let activeSelectedHospital = null;
+
+        // Map Initialization
+        function initMap() {
+            leafletMap = L.map('map', { zoomControl: true }).setView([37.4980, 127.0450], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '© OpenStreetMap'
+            }).addTo(leafletMap);
+
+            const userIcon = L.divIcon({
+                className: 'custom-user-pin',
+                html: `<div class="w-5 h-5 rounded-full bg-cyan-400 border-2 border-white glow-cyan animate-ping"></div>`,
+                iconSize: [20, 20]
+            });
+            L.marker([37.4980, 127.0450], { icon: userIcon }).addTo(leafletMap)
+             .bindPopup('<b style="color:#000;">현재 사용자 위치 (강남구 역삼동)</b>');
+
+            renderMapMarkers();
+        }
+
+        // Render Map Markers
+        function renderMapMarkers() {
+            if(!leafletMap) return;
+
+            markersGroup.forEach(m => leafletMap.removeLayer(m));
+            markersGroup = [];
+            if(routePolyline) leafletMap.removeLayer(routePolyline);
+
+            const filtered = getFilteredData();
+
+            filtered.forEach(h => {
+                let pinColor = '#10B981';
+                if(h.signal === 'yellow') pinColor = '#F59E0B';
+                if(h.signal === 'red') pinColor = '#EF4444';
+
+                const customMarkerIcon = L.divIcon({
+                    className: 'hospital-marker-pin',
+                    html: `<div style="background-color:${pinColor}; font-weight:bold; color:black; padding:4px 8px; border-radius:12px; font-size:10px; border:1px solid white; box-shadow:0 4px 10px rgba(0,0,0,0.5); cursor:pointer;">
+                             ${h.name.split(' ')[0]}
+                           </div>`,
+                    iconSize: [80, 25]
+                });
+
+                const marker = L.marker([h.lat, h.lng], { icon: customMarkerIcon }).addTo(leafletMap);
+                marker.on('click', () => {
+                    openRouteModal(h.id);
+                    drawAiRoute([37.4980, 127.0450], [h.lat, h.lng]);
+                });
+                markersGroup.push(marker);
+            });
+        }
+
+        function drawAiRoute(start, end) {
+            if(routePolyline) leafletMap.removeLayer(routePolyline);
+            
+            const latlngs = [
+                start,
+                [(start[0]+end[0])/2 + 0.002, (start[1]+end[1])/2 - 0.002],
+                end
+            ];
+
+            routePolyline = L.polyline(latlngs, {
+                color: '#6366F1',
+                weight: 5,
+                opacity: 0.8,
+                dashArray: '8, 8'
+            }).addTo(leafletMap);
+
+            leafletMap.fitBounds(L.latLngBounds([start, end]), { padding: [40, 40] });
+        }
+
+        function getFilteredData() {
+            const query = document.getElementById('symptom-search').value.toLowerCase().trim();
+
+            return hospitalsData.filter(h => {
+                const matchTab = h.tags.includes(activeFilter) || activeFilter === 'ai_rec';
+                const matchQuery = !query || 
+                                   h.name.toLowerCase().includes(query) || 
+                                   h.address.toLowerCase().includes(query) || 
+                                   h.notes.toLowerCase().includes(query) ||
+                                   h.type.toLowerCase().includes(query);
+                return matchTab && matchQuery;
+            }).sort((a, b) => {
+                if (activeFilter === 'beds_available') {
+                    return b.bedsCountNum - a.bedsCountNum;
+                }
+                return a.distanceNum - b.distanceNum;
+            });
+        }
+
+        function renderCards() {
+            const container = document.getElementById('hospital-cards-list');
+            container.innerHTML = '';
+
+            const data = getFilteredData();
+
+            if(data.length === 0) {
+                container.innerHTML = `
+                    <div class="glass-card p-8 rounded-2xl text-center space-y-2">
+                        <i class="fa-solid fa-hospital-triangle-exclamation text-3xl text-amber-400"></i>
+                        <p class="text-sm font-bold text-white">조건에 맞는 병원이 없습니다.</p>
+                        <p class="text-xs text-slate-400">검색어를 변경하거나 필터를 초기화해 보세요.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            data.forEach(h => {
+                let signalBadge = 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60';
+                let signalGlow = 'bg-emerald-500 glow-green';
+                if(h.signal === 'yellow') {
+                    signalBadge = 'bg-amber-950/80 text-amber-400 border-amber-800/60';
+                    signalGlow = 'bg-amber-500 glow-yellow';
+                } else if(h.signal === 'red') {
+                    signalBadge = 'bg-red-950/80 text-red-400 border-red-800/60';
+                    signalGlow = 'bg-red-500 glow-red';
+                }
+
+                const cardHTML = `
+                    <div class="glass-card rounded-2xl p-4 sm:p-5 space-y-3.5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                            <div>
+                                <div class="flex items-center space-x-2 flex-wrap gap-y-1 mb-1">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${signalBadge}">
+                                        <span class="w-2 h-2 rounded-full ${signalGlow}"></span>
+                                        ${h.signalText}
+                                    </span>
+                                    <span class="text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">${h.type}</span>
+                                    <span class="text-[11px] text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/40">${h.operatingHours}</span>
+                                </div>
+                                <h3 class="text-base sm:text-lg font-bold text-white hover:text-indigo-400 transition cursor-pointer" onclick="openRouteModal('${h.id}')">
+                                    ${h.name}
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-0.5">
+                                    <i class="fa-solid fa-location-dot text-slate-500 mr-1"></i>${h.address}
+                                </p>
+                            </div>
+
+                            <div class="flex sm:flex-col items-center sm:items-end justify-between bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 shrink-0 mt-1 sm:mt-0">
+                                <span class="text-xs text-slate-400">거리</span>
+                                <div class="text-right">
+                                    <span class="text-sm font-bold text-white font-mono">${h.distanceStr}</span>
+                                    <span class="text-[11px] text-indigo-400 font-semibold block">
+                                        <i class="fa-solid fa-bolt text-[10px]"></i> ${h.aiEta}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-[10px] text-slate-400 block mb-0.5">일반 응급병상</span>
+                                <span class="font-bold text-slate-200">${h.generalBeds}</span>
+                            </div>
+                            <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-[10px] text-slate-400 block mb-0.5">소아 전용병상</span>
+                                <span class="font-bold text-slate-200">${h.pediatricBeds}</span>
+                            </div>
+                            <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-[10px] text-slate-400 block mb-0.5">음압 격리병상</span>
+                                <span class="font-bold text-emerald-400">${h.negativeIsoBeds}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
+                            <div class="text-[11px] text-indigo-300/90 flex items-center gap-1 font-medium">
+                                <i class="fa-solid fa-shield-halved text-indigo-400"></i> ${h.notes}
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <button onclick="openCallModal('${h.name}', '${h.phone}')" class="flex-1 sm:flex-none px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-phone text-emerald-400"></i>
+                                    <span>전화 연결</span>
+                                </button>
+
+                                <button onclick="openBookingModal('${h.name}')" class="flex-1 sm:flex-none px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 transition flex items-center justify-center gap-1">
+                                    <i class="fa-solid fa-calendar-check text-indigo-400"></i>
+                                    <span>사전 접수</span>
+                                </button>
+
+                                <button onclick="openRouteModal('${h.id}')" class="flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center justify-center gap-1 shadow-md shadow-indigo-600/30">
+                                    <i class="fa-solid fa-compass"></i>
+                                    <span>AI 길안내</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += cardHTML;
+            });
+
+            renderMapMarkers();
+        }
+
+        function handleSearch() {
+            renderCards();
+        }
+
+        function resetSearch() {
+            document.getElementById('symptom-search').value = '';
+            activeFilter = 'ai_rec';
+            updateTabStyles();
+            renderCards();
+        }
+
+        function triggerVoiceSearch() {
+            const overlay = document.getElementById('voice-overlay');
+            const voiceText = document.getElementById('voice-text');
+            overlay.classList.remove('hidden');
+            
+            const samples = ["소아 야간 고열", "응급실 일반병상 여유", "강남세브란스", "야간 의원"];
+            const chosen = samples[Math.floor(Math.random() * samples.length)];
+
+            setTimeout(() => {
+                voiceText.innerText = `인식 결과: "${chosen}"`;
+            }, 1000);
+
+            setTimeout(() => {
+                document.getElementById('symptom-search').value = chosen;
+                overlay.classList.add('hidden');
+                renderCards();
+            }, 2200);
+        }
+
+        function setFilter(filterType) {
+            activeFilter = filterType;
+            updateTabStyles();
+            renderCards();
+        }
+
+        function updateTabStyles() {
+            const tabs = ['ai_rec', 'beds_available', 'pediatric', 'clinic_night'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if(btn) {
+                    if(t === activeFilter) {
+                        btn.className = "filter-tab active px-4 py-2.5 rounded-xl text-xs font-bold transition shrink-0 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 flex items-center gap-1.5";
+                    } else {
+                        btn.className = "filter-tab px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition shrink-0 flex items-center gap-1.5";
+                    }
+                }
+            });
+        }
+
+        function getCurrentGPSLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    document.getElementById('current-location-text').innerText = `GPS 수신 (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
+                    alert(`현재 위치 GPS 좌표가 수신되었습니다.\n(경도: ${lng.toFixed(4)}, 위도: ${lat.toFixed(4)})`);
+                }, () => {
+                    alert('GPS 권한 확인이 필요합니다. 기본 위치로 진행합니다.');
+                });
+            }
+        }
+
+        function openRouteModal(hospitalId) {
+            const h = hospitalsData.find(item => item.id === hospitalId) || hospitalsData[0];
+            activeSelectedHospital = h;
+
+            document.getElementById('route-hospital-name').innerText = h.name;
+            document.getElementById('route-dist').innerText = h.distanceStr;
+
+            const encodedAddress = encodeURIComponent(h.address + " " + h.name);
+            const googleMapEmbedUrl = `https://maps.google.com/maps?q=${encodedAddress}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+            document.getElementById('google-maps-iframe').src = googleMapEmbedUrl;
+
+            const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}&travelmode=driving`;
+            document.getElementById('direct-google-maps-link').href = googleMapsDirUrl;
+
+            document.getElementById('route-modal').classList.remove('hidden');
+        }
+
+        function openCallModal(name, phone) {
+            document.getElementById('call-hospital-name').innerText = name;
+            document.getElementById('call-phone-number').innerText = phone;
+            document.getElementById('call-direct-link').href = `tel:${phone}`;
+            document.getElementById('call-modal').classList.remove('hidden');
+        }
+
+        function openBookingModal(name) {
+            document.getElementById('booking-hospital-name').innerText = name;
+            document.getElementById('booking-modal').classList.remove('hidden');
+        }
+
+        function launchNavigation(provider) {
+            if(!activeSelectedHospital) return;
+            const target = encodeURIComponent(activeSelectedHospital.address + " " + activeSelectedHospital.name);
+            
+            if(provider === 'google') {
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${target}&travelmode=driving`, '_blank');
+            } else if(provider === 'kakao') {
+                window.open(`https://map.kakao.com/link/search/${target}`, '_blank');
+            } else if(provider === 'naver') {
+                window.open(`https://map.naver.com/v5/search/${target}`, '_blank');
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function handleBookingSubmit(e) {
+            e.preventDefault();
+            alert('사전 접수 문의가 정상 제출되었습니다.');
+            closeModal('booking-modal');
+        }
+
+        function startNavi() {
+            if(activeSelectedHospital) {
+                launchNavigation('google');
+            }
+            closeModal('route-modal');
+        }
+
+        // On Load Initialization
+        window.onload = function() {
+            initMap();
+            renderCards();
+        };
+    </script>
+</body>
+</html>
