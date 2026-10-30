@@ -108,7 +108,7 @@
                     <div>
                         <div class="flex items-center space-x-2">
                             <h1 class="text-lg font-black tracking-tight text-white flex items-center gap-1">
-                                응급<span class="text-indigo-400">GO</span> <span class="text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/50 font-mono font-bold">AI v2.6</span>
+                                응급<span class="text-indigo-400">GO</span> <span class="text-xs px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-700/50 font-mono font-bold">AI v2.8</span>
                             </h1>
                         </div>
                         <p class="text-[11px] text-slate-400 font-medium">국립중앙의료원 · 심평원 API 통합 가이드</p>
@@ -177,7 +177,7 @@
                 <!-- Input Box -->
                 <div class="relative flex-1 w-full">
                     <i class="fa-solid fa-magnifying-glass absolute left-4 top-3.5 text-slate-400 text-sm"></i>
-                    <input type="text" id="symptom-search" onkeyup="handleSearch()" placeholder="증상 또는 병원명 검색 (예: 소아 야간 고열, 맹장, 복통, 강남세브란스...)" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-11 pr-24 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
+                    <input type="text" id="symptom-search" onkeyup="handleSearch()" placeholder="증상 또는 병원명 검색 (예: 강동구, 소아 야간 고열, 맹장, 복통, 강동성심병원...)" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl pl-11 pr-24 py-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition">
                     <button onclick="triggerVoiceSearch()" class="absolute right-2 top-2 px-3 py-1.5 bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
                         <i class="fa-solid fa-microphone text-indigo-400"></i>
                         <span class="hidden sm:inline">음성 검색</span>
@@ -1010,7 +1010,7 @@
             const voiceText = document.getElementById('voice-text');
             overlay.classList.remove('hidden');
             
-            const samples = ["소아 야간 고열", "응급실 일반병상 여유", "강남세브란스", "야간 의원"];
+            const samples = ["강동구", "소아 야간 고열", "응급실 일반병상 여유", "강동성심병원", "야간 의원"];
             const chosen = samples[Math.floor(Math.random() * samples.length)];
 
             setTimeout(() => {
@@ -1055,7 +1055,7 @@
                         if(locTextEl) locTextEl.innerText = "기본 위치 사용";
                         if(mapStatusEl) mapStatusEl.innerText = "위치 허용 권한 필요";
                         if(showAlert) {
-                            alert('위치 서비스 권한이 차단되어 있습니다. 스마트폰 설정에서 브라우저 위치 권한을 허용해 주시기 바랍니다.');
+                            alert('위치 서비스 권한이 차단되어 있습니다. 브라우저 주소창 왼쪽의 위치 권한을 "허용"으로 변경해주세요.');
                         }
                     },
                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
