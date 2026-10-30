@@ -122,19 +122,19 @@
 
                 <!-- GPS Mobile Badge -->
                 <div class="sm:hidden">
-                    <span class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 inline-flex items-center gap-1.5">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> GPS 실시간
-                    </span>
+                    <button onclick="getCurrentGPSLocation(true)" class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 inline-flex items-center gap-1.5 active:scale-95 transition">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> GPS 실시간 재수신
+                    </button>
                 </div>
             </div>
 
             <!-- Top Header Indicators & Location -->
             <div class="flex items-center space-x-3 w-full sm:w-auto justify-end text-xs">
                 <!-- Location Indicator -->
-                <button onclick="getCurrentGPSLocation()" class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-900/90 border border-gray-800 hover:border-cyan-500/50 transition cursor-pointer">
+                <button onclick="getCurrentGPSLocation(true)" class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-900/90 border border-gray-800 hover:border-cyan-500/50 transition cursor-pointer">
                     <i class="fa-solid fa-location-crosshairs text-cyan-400 animate-spin" style="animation-duration: 6s;"></i>
                     <span class="text-gray-400">현재 위치:</span>
-                    <span class="font-semibold text-gray-200" id="current-location-text">서울특별시 강남구 역삼동</span>
+                    <span class="font-semibold text-gray-200" id="current-location-text">위치 탐색 중...</span>
                     <span class="text-[10px] text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800/40">GPS 재수신</span>
                 </button>
                 <!-- AI Status -->
@@ -270,7 +270,7 @@
                     <!-- Map Tip Footer -->
                     <div class="p-2.5 bg-slate-900/90 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
                         <span><i class="fa-solid fa-circle-info text-indigo-400 mr-1"></i> 마커 클릭 시 해당 병원의 AI 상세 경로가 계산됩니다.</span>
-                        <span class="text-emerald-400 font-semibold" id="map-status">준비 완료</span>
+                        <span class="text-emerald-400 font-semibold" id="map-status">GPS 수신 중</span>
                     </div>
                 </div>
             </div>
@@ -579,24 +579,64 @@
         let routePolyline = null;
         let activeSelectedHospital = null;
 
+        // Current User Location Coordinates (Defaults to center of Seoul if GPS fails)
+        let currentUserPos = { lat: 37.5665, lng: 126.9780 };
+        let userMarker = null;
+
+        // Calculate distance between two lat/lng points in km (Haversine formula)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Recalculate hospital distances based on real user position
+        function updateHospitalDistances() {
+            hospitalsData.forEach(h => {
+                const dist = calculateDistance(currentUserPos.lat, currentUserPos.lng, h.lat, h.lng);
+                h.distanceNum = parseFloat(dist.toFixed(1));
+                h.distanceStr = `${h.distanceNum} km`;
+                const estimatedMinutes = Math.max(2, Math.round(dist * 3));
+                h.aiEta = `차량 ${estimatedMinutes}분`;
+            });
+        }
+
         // Map Initialization
         function initMap() {
-            leafletMap = L.map('map', { zoomControl: true }).setView([37.4980, 127.0450], 13);
+            leafletMap = L.map('map', { zoomControl: true }).setView([currentUserPos.lat, currentUserPos.lng], 13);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 18,
                 attribution: '© OpenStreetMap'
             }).addTo(leafletMap);
 
+            updateUserMarkerOnMap();
+            renderMapMarkers();
+        }
+
+        function updateUserMarkerOnMap() {
+            if(!leafletMap) return;
+
+            if(userMarker) {
+                leafletMap.removeLayer(userMarker);
+            }
+
             const userIcon = L.divIcon({
                 className: 'custom-user-pin',
                 html: `<div class="w-5 h-5 rounded-full bg-cyan-400 border-2 border-white glow-cyan animate-ping"></div>`,
                 iconSize: [20, 20]
             });
-            L.marker([37.4980, 127.0450], { icon: userIcon }).addTo(leafletMap)
-             .bindPopup('<b style="color:#000;">현재 사용자 위치 (강남구 역삼동)</b>');
 
-            renderMapMarkers();
+            userMarker = L.marker([currentUserPos.lat, currentUserPos.lng], { icon: userIcon })
+                .addTo(leafletMap)
+                .bindPopup('<b style="color:#000;">현재 사용자 내 위치</b>');
+
+            leafletMap.panTo([currentUserPos.lat, currentUserPos.lng]);
         }
 
         // Render Map Markers
@@ -625,7 +665,7 @@
                 const marker = L.marker([h.lat, h.lng], { icon: customMarkerIcon }).addTo(leafletMap);
                 marker.on('click', () => {
                     openRouteModal(h.id);
-                    drawAiRoute([37.4980, 127.0450], [h.lat, h.lng]);
+                    drawAiRoute([currentUserPos.lat, currentUserPos.lng], [h.lat, h.lng]);
                 });
                 markersGroup.push(marker);
             });
@@ -648,6 +688,25 @@
             }).addTo(leafletMap);
 
             leafletMap.fitBounds(L.latLngBounds([start, end]), { padding: [40, 40] });
+        }
+
+        function setFilter(filterType) {
+            activeFilter = filterType;
+            updateTabStyles();
+            renderCards();
+        }
+
+        function updateTabStyles() {
+            const tabs = ['ai_rec', 'beds_available', 'pediatric', 'clinic_night'];
+            tabs.forEach(t => {
+                const el = document.getElementById(`tab-${t}`);
+                if(!el) return;
+                if(t === activeFilter) {
+                    el.className = 'filter-tab active px-4 py-2.5 rounded-xl text-xs font-bold transition shrink-0 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 flex items-center gap-1.5';
+                } else {
+                    el.className = 'filter-tab px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition shrink-0 flex items-center gap-1.5';
+                }
+            });
         }
 
         function getFilteredData() {
@@ -800,39 +859,47 @@
                 document.getElementById('symptom-search').value = chosen;
                 overlay.classList.add('hidden');
                 renderCards();
-            }, 2200);
+            }, 2000);
         }
 
-        function setFilter(filterType) {
-            activeFilter = filterType;
-            updateTabStyles();
-            renderCards();
-        }
+        function getCurrentGPSLocation(showAlert = false) {
+            const locTextEl = document.getElementById('current-location-text');
+            const mapStatusEl = document.getElementById('map-status');
 
-        function updateTabStyles() {
-            const tabs = ['ai_rec', 'beds_available', 'pediatric', 'clinic_night'];
-            tabs.forEach(t => {
-                const btn = document.getElementById(`tab-${t}`);
-                if(btn) {
-                    if(t === activeFilter) {
-                        btn.className = "filter-tab active px-4 py-2.5 rounded-xl text-xs font-bold transition shrink-0 bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 flex items-center gap-1.5";
-                    } else {
-                        btn.className = "filter-tab px-4 py-2.5 rounded-xl text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 transition shrink-0 flex items-center gap-1.5";
-                    }
-                }
-            });
-        }
-
-        function getCurrentGPSLocation() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    document.getElementById('current-location-text').innerText = `GPS 수신 (${lat.toFixed(3)}, ${lng.toFixed(3)})`;
-                    alert(`현재 위치 GPS 좌표가 수신되었습니다.\n(경도: ${lng.toFixed(4)}, 위도: ${lat.toFixed(4)})`);
-                }, () => {
-                    alert('GPS 권한 확인이 필요합니다. 기본 위치로 진행합니다.');
-                });
+                if(locTextEl) locTextEl.innerText = "GPS 수신 중...";
+                if(mapStatusEl) mapStatusEl.innerText = "GPS 위치 찾는 중...";
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentUserPos.lat = position.coords.latitude;
+                        currentUserPos.lng = position.coords.longitude;
+
+                        if(locTextEl) {
+                            locTextEl.innerText = `GPS 수신 완료 (${currentUserPos.lat.toFixed(3)}, ${currentUserPos.lng.toFixed(3)})`;
+                        }
+                        if(mapStatusEl) mapStatusEl.innerText = "실시간 위치 반영 완료";
+
+                        updateHospitalDistances();
+                        updateUserMarkerOnMap();
+                        renderCards();
+
+                        if(showAlert) {
+                            alert(`현재 GPS 위치 정보를 정상 수신했습니다.\n(위도: ${currentUserPos.lat.toFixed(4)}, 경도: ${currentUserPos.lng.toFixed(4)})`);
+                        }
+                    },
+                    (error) => {
+                        console.warn('GPS 수신 실패:', error.message);
+                        if(locTextEl) locTextEl.innerText = "기본 위치 사용 중";
+                        if(mapStatusEl) mapStatusEl.innerText = "위치 허용 필요";
+                        if(showAlert) {
+                            alert('위치 권한을 허용해 주셔야 현재 위치 기반으로 응급실 거리를 안내할 수 있습니다.');
+                        }
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            } else {
+                if(showAlert) alert('이 브라우저에서는 GPS 위치 추적 기능을 지원하지 않습니다.');
             }
         }
 
@@ -843,11 +910,12 @@
             document.getElementById('route-hospital-name').innerText = h.name;
             document.getElementById('route-dist').innerText = h.distanceStr;
 
-            const encodedAddress = encodeURIComponent(h.address + " " + h.name);
-            const googleMapEmbedUrl = `https://maps.google.com/maps?q=${encodedAddress}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+            const originParam = `${currentUserPos.lat},${currentUserPos.lng}`;
+            const destinationParam = encodeURIComponent(h.address + " " + h.name);
+            const googleMapEmbedUrl = `https://maps.google.com/maps?saddr=${originParam}&daddr=${destinationParam}&t=&z=14&ie=UTF8&output=embed`;
             document.getElementById('google-maps-iframe').src = googleMapEmbedUrl;
 
-            const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}&travelmode=driving`;
+            const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destinationParam}&travelmode=driving`;
             document.getElementById('direct-google-maps-link').href = googleMapsDirUrl;
 
             document.getElementById('route-modal').classList.remove('hidden');
@@ -898,6 +966,7 @@
         // On Load Initialization
         window.onload = function() {
             initMap();
+            getCurrentGPSLocation(false);
             renderCards();
         };
     </script>
