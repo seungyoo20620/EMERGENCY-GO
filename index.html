@@ -11,6 +11,8 @@
     <!-- Leaflet CSS for Map Simulation -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Kakao Maps JavaScript API -->
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=01e46b1e5f97414629e6915d785e112d&libraries=services"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     
@@ -436,6 +438,9 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
+        // Kakao API JavaScript Key
+        const KAKAO_JAVASCRIPT_KEY = '01e46b1e5f97414629e6915d785e112d';
+
         const hospitalsData = [
             // --- 1. 서울 강동구 주요 의료기관 ---
             {
@@ -1098,11 +1103,14 @@
         function launchNavigation(provider) {
             if(!activeSelectedHospital) return;
             const target = encodeURIComponent(activeSelectedHospital.address + " " + activeSelectedHospital.name);
+            const lat = activeSelectedHospital.lat;
+            const lng = activeSelectedHospital.lng;
             
             if(provider === 'google') {
                 window.open(`https://www.google.com/maps/dir/?api=1&destination=${target}&travelmode=driving`, '_blank');
             } else if(provider === 'kakao') {
-                window.open(`https://map.kakao.com/link/search/${target}`, '_blank');
+                // Kakao Map Direct Web Navigation Link
+                window.open(`https://map.kakao.com/link/to/${encodeURIComponent(activeSelectedHospital.name)},${lat},${lng}`, '_blank');
             } else if(provider === 'naver') {
                 window.open(`https://map.naver.com/v5/search/${target}`, '_blank');
             }
