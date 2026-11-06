@@ -115,11 +115,6 @@
                     <span class="font-semibold text-gray-200" id="current-location-text">GPS 위치 확인 중...</span>
                     <span class="text-[10px] text-emerald-400 bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-800/40">GPS 재수신</span>
                 </button>
-                <!-- AI Status & Gemini AI Diagnosis Modal Trigger Button -->
-                <button onclick="openGeminiModal()" class="flex items-center space-x-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-500/20 transition cursor-pointer border border-indigo-400/40">
-                    <i class="fa-solid fa-brain text-cyan-300 animate-pulse"></i>
-                    <span class="text-xs">Gemini AI 증상 진단</span>
-                </button>
             </div>
         </div>
     </header>
@@ -260,61 +255,6 @@
         <p>본 앱은 국립중앙의료원(중앙응급의료센터 응급의료포털) 및 건강보험심사평가원(보건의료빅데이터) Open API 데이터를 기반으로 제공됩니다.</p>
         <p>© 2026 EmergencyGO AI Inc. All Rights Reserved. 본 시스템은 긴급 상황 시 보조 참고용 도구입니다.</p>
     </footer>
-
-    <!-- MODAL 0: GEMINI AI SYMPTOM DIAGNOSIS MODAL (NEW) -->
-    <div id="gemini-modal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-        <div class="glass-panel w-full max-w-xl rounded-2xl border-indigo-500/40 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="p-4 bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-900 border-b border-indigo-800/50 flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-500 text-white flex items-center justify-center text-xl shadow-lg shadow-indigo-500/30">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-base font-bold text-white flex items-center gap-2">
-                            Gemini AI 응급증상 진단 & 맞춤 병원 추천
-                        </h3>
-                        <p class="text-xs text-indigo-300">실시간 증상 분석 기반 의료기관 큐레이션</p>
-                    </div>
-                </div>
-                <button onclick="closeModal('gemini-modal')" class="text-slate-400 hover:text-white p-1">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
-            </div>
-
-            <div class="p-5 overflow-y-auto space-y-4 flex-1">
-                <!-- Input Section -->
-                <div class="space-y-2">
-                    <label class="block text-xs font-bold text-slate-200">
-                        <i class="fa-solid fa-notes-medical text-indigo-400 mr-1"></i>현재 환자의 상태 및 증상을 상세히 입력해주세요
-                    </label>
-                    <textarea id="gemini-symptom-input" rows="3" placeholder="예: 3살 아이가 39.5도 고열이 나고 열성 경련 증세가 있어요. 주변 소아 야간 응급실 알려주세요." class="w-full bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition"></textarea>
-                </div>
-
-                <!-- AI Query Button -->
-                <button onclick="runGeminiDiagnosis()" id="gemini-btn" class="w-full py-3 bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2 transition">
-                    <i class="fa-solid fa-robot"></i>
-                    <span id="gemini-btn-text">Gemini AI 응급 진단 실행</span>
-                </button>
-
-                <!-- AI Diagnosis Output Card -->
-                <div id="gemini-result-container" class="hidden space-y-3 pt-2">
-                    <div class="p-4 bg-indigo-950/40 border border-indigo-500/30 rounded-xl space-y-3">
-                        <div class="flex items-center justify-between border-b border-indigo-800/40 pb-2">
-                            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                                <i class="fa-solid fa-clipboard-check text-cyan-400"></i> AI 진단 리포트
-                            </span>
-                            <span id="gemini-urgency-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-red-600 text-white">
-                                응급도: 계산 중
-                            </span>
-                        </div>
-                        <div id="gemini-result-text" class="text-xs sm:text-sm text-slate-200 leading-relaxed space-y-2">
-                            <!-- AI Result dynamic injection -->
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- MODAL 1: AI ROUTE GUIDANCE & GOOGLE MAPS MODAL -->
     <div id="route-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
@@ -1155,96 +1095,16 @@
             document.getElementById(modalId).classList.add('hidden');
         }
 
-        // --- GEMINI AI DIAGNOSIS INTEGRATION ---
-        function openGeminiModal() {
-            document.getElementById('gemini-modal').classList.remove('hidden');
-        }
-
-        async function runGeminiDiagnosis() {
-            const inputEl = document.getElementById('gemini-symptom-input');
-            const btnEl = document.getElementById('gemini-btn');
-            const btnTextEl = document.getElementById('gemini-btn-text');
-            const resultContainer = document.getElementById('gemini-result-container');
-            const resultTextEl = document.getElementById('gemini-result-text');
-            const badgeEl = document.getElementById('gemini-urgency-badge');
-
-            const userPrompt = inputEl.value.trim();
-            if(!userPrompt) {
-                alert('증상을 입력해 주세요.');
-                return;
-            }
-
-            btnEl.disabled = true;
-            btnTextEl.innerText = "Gemini AI가 증상을 실시간 분석 중...";
-            resultContainer.classList.add('hidden');
-
-            const systemPrompt = `당신은 대한민국 최고 수준의 응급의학 전문 AI 가이드입니다. 
-환자가 제시한 증상을 바탕으로 다음 3가지를 한국어로 명확하게 답변하세요:
-1. [응급도] (중증응급/신속진료/일반야간 중 택1)
-2. [의심 증상 및 대처 조치] (2~3문장)
-3. [추천 병원 유형] (예: 소아응급 전용센터, 권역응급의료센터, 달빛어린이병원 등)`;
-
-            const apiKey = ""; // Runtime automatically injected by environment
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: userPrompt }] }],
-                        systemInstruction: { parts: [{ text: systemPrompt }] }
-                    })
-                });
-
-                const data = await response.json();
-                const aiOutput = data.candidates?.[0]?.content?.parts?.[0]?.text || "AI 분석 결과를 불러올 수 없습니다. 증상이 심각하다면 119에 즉시 연락하세요.";
-
-                // Format urgency badge
-                if(aiOutput.includes('중증') || userPrompt.includes('경련') || userPrompt.includes('의식') || userPrompt.includes('출혈')) {
-                    badgeEl.className = "px-2.5 py-0.5 rounded-full text-[11px] font-black bg-red-600 text-white animate-pulse";
-                    badgeEl.innerText = "응급도: 중증 응급 (119 권장)";
-                } else if(aiOutput.includes('소아') || aiOutput.includes('고열')) {
-                    badgeEl.className = "px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-500 text-black";
-                    badgeEl.innerText = "응급도: 신속 소아 진료 필요";
-                } else {
-                    badgeEl.className = "px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-500 text-black";
-                    badgeEl.innerText = "응급도: 일반 야간/휴일 진료";
-                }
-
-                resultTextEl.innerHTML = aiOutput.replace(/\n/g, '<br>');
-                resultContainer.classList.remove('hidden');
-
-                // Filter search list automatically based on symptom input
-                document.getElementById('symptom-search').value = userPrompt;
-                renderCards();
-
-            } catch (err) {
-                console.error("Gemini API Error:", err);
-                resultTextEl.innerHTML = "Gemini AI 연동 중 오류가 발생했습니다. 아래 병원 목록 및 카카오 지도에서 가까운 응급실을 선택해 주세요.";
-                resultContainer.classList.remove('hidden');
-            } finally {
-                btnEl.disabled = false;
-                btnTextEl.innerText = "Gemini AI 응급 진단 실행";
-            }
-        }
-
         function handleBookingSubmit(e) {
             e.preventDefault();
-            alert('사전 접수 문의가 정상 제출되었습니다.');
+            alert('사전 접수가 성공적으로 전달되었습니다.\n병원 응급실 접수처에서 연락처로 수신 문자를 확인합니다.');
             closeModal('booking-modal');
         }
 
-        function startNavi() {
-            if(activeSelectedHospital) {
-                launchNavigation('google');
-            }
-            closeModal('route-modal');
-        }
-
+        // Initialize App on Window Load
         window.onload = function() {
-            initMap();
             getCurrentGPSLocation(false);
+            initMap();
             renderCards();
         };
     </script>
